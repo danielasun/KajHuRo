@@ -1,0 +1,28 @@
+Initialize Biped Robot
+Define zmp system for x and y
+Calculate preview Controller gains based on system
+Create footstep planner
+
+Repeatedly:
+	
+
+	for each step:
+		get next desired foot placement pair
+
+		Get initial conditions
+		Simulate x and y zmp systems to get COM trajectory
+		calculate swing foot trajectory
+
+		for all time steps between the step:
+			put out positions to all of the joints:
+			update the COM's position
+			IK swing leg
+			IK stance leg 
+
+		swap stance leg
+		update positions
+
+	Plan next 3 footsteps
+	append additional steps
+
+
