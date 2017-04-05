@@ -5,12 +5,13 @@ Create footstep planner
 
 Repeatedly:
 	
+    Get initial conditions
+    Simulate x and y zmp systems to get COM trajectory
 
 	for each step:
 		get next desired foot placement pair
 
-		Get initial conditions
-		Simulate x and y zmp systems to get COM trajectory
+
 		calculate swing foot trajectory
 
 		for all time steps between the step:

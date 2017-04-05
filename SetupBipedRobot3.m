@@ -9,7 +9,7 @@ UX = [1 0 0]';
 UY = [0 1 0]';
 UZ = [0 0 1]';
 
-uLINK    = struct('name','BODY'    , 'm', 10, 'sister', 0, 'child', 2, 'b',[0  0    0.7]','a',UZ,'q',0);
+uLINK    = struct('name','BODY'    , 'm', 10, 'sister', 0, 'child', 2, 'b',[0  0   0.7]','a',UZ,'q',0);
 
 uLINK(2) = struct('name','RLEG_J0' , 'm',  5, 'sister', 8, 'child', 3, 'b',[0 -0.1 0]'   ,'a',UZ,'q',0);
 uLINK(3) = struct('name','RLEG_J1' , 'm',  1, 'sister', 0, 'child', 4, 'b',[0  0   0]','a',UX,'q',0);
@@ -65,7 +65,7 @@ uLINK(LLEG_J2).q = -10.0*ToRad;
 uLINK(LLEG_J3).q = 20.0*ToRad;
 uLINK(LLEG_J4).q = -10.0*ToRad;
 
-uLINK(BODY).p = [0.0, 0.0, .7]';
+uLINK(BODY).p = [0.0, -.1, .7]';
 uLINK(BODY).R = eye(3);
 
 Rfoot.p = [0,-.1,0]';

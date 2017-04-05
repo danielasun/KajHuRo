@@ -2,16 +2,15 @@
 
 clc
 close all
-clear
 
-addpath(strcat(pwd(),'/preview_control'))
-addpath(strcat(pwd(),'/graphing'))
-
-REGENERATE_ROBOT_DATA = 0;
+% addpath(strcat(pwd(),'/preview_control'))
+% addpath(strcat(pwd(),'/graphing'))
 
 
+% needs the file regen.m
 if exist('robot_config.mat','file') ~= 2 || REGENERATE_ROBOT_DATA == true
     disp 'regenerating robot preview controller'
+    REGENERATE_ROBOT_DATA = false;
     SetupBipedRobot3
     walk_config;
 
@@ -41,11 +40,12 @@ if exist('robot_config.mat','file') ~= 2 || REGENERATE_ROBOT_DATA == true
     sys = ss(A,B,C,D,T);
     [sys_t,Gi,Gx,Gd]= preview_control(sys,previewLength,Qe,Qx,R);
 
-    steps = [ 0   0    0    .3 ;
-              0  0  -0.1  0.1];
+    steps = [ 0 0     .2    .4  .6 .8   1  1.2;
+              -.1 .1  -0.1  0.1 -.1 .1 -.1 .1];
 
-    tsPerStep = previewLength/2;
-
+    tsPerStep = round(previewLength/1.5);
+    xStepSize = .2;
+    yStepSize = .1;
     stepIdx = 1;
     xErr = 0;
     yErr = 0;
@@ -53,6 +53,7 @@ if exist('robot_config.mat','file') ~= 2 || REGENERATE_ROBOT_DATA == true
     RIGHT_FOOT = 0;
     LEFT_FOOT = 1;
     stanceFoot = LEFT_FOOT;
+    stepGroupSize = 4;
 
     xq = [0 uLINK(BODY).p(1), 0 0]';
     yq = [0 uLINK(BODY).p(2), 0 0]';
@@ -63,67 +64,72 @@ else
     load('robot_config.mat')
 end
 
-robotViewHandle = figure('units','normalized','position',[0 0.5 0.3 0.3])
-graphPlotHandle = figure('units','normalized','position',[0 0.1 0.3 0.3])
+robotViewHandle1 = figure('units','normalized','position',[0 0.5 0.3 0.3]);
+robotViewHandle2 = figure('units','normalized','position',[0.32 0.5 0.3 0.3]);
+graphPlotHandle = figure('units','normalized','position',[0 0.1 0.3 0.3]);
 
 
 %%%%%%%%%%%
 % Walking %
 %%%%%%%%%%%
-for iii = 1:3 % group of steps
+for stepGroupIdx = 1:2 % group of steps
+    stepGroupIdx
+    xZmpRef = footsteps(steps(1,:), tsPerStep);
+    yZmpRef = footsteps(steps(2,:), tsPerStep);
     
+    [xq, xZmp, ux] = SimulatePreviewDynamics(sys, sys_t, Gi, Gx, Gd, ...
+        xZmpRef, xq(2:4,end), xErr, previewLength);
+    [yq, yZmp, uy] = SimulatePreviewDynamics(sys, sys_t, Gi, Gx, Gd, ...
+        yZmpRef, yq(2:4,end), yErr, previewLength);
     
-    for ii = 1:3
-        xZmpRef = footsteps(steps(1,:), tsPerStep);
-        yZmpRef = footsteps(steps(2,:), tsPerStep);
+    xComRef = xq(2,:);
+    yComRef = yq(2,:);
+    stanceFoot
 
-        [xq, xZmp, ux] = SimulatePreviewDynamics(sys, sys_t, Gi, Gx, Gd, ...
-            xZmpRef, xq(2:4,end), xErr, previewLength);
-        [yq, yZmp, uy] = SimulatePreviewDynamics(sys, sys_t, Gi, Gx, Gd, ...
-            yZmpRef, yq(2:4,end), yErr, previewLength);
+    figure(graphPlotHandle)
+    subplot(2,1,1)
+    cla
+    hold on
+    plot(xComRef)
+    plot(xZmpRef)
+    plot(xZmp)
+    legend('xComRef','xZmpRef','xZmp')
+    subplot(2,1,2)
+    cla
+    hold on
+    plot(yComRef)
+    plot(yZmpRef)
+    plot(yZmp)
+    legend('yComRef','yZmpRef','yZmp')
+    
+    for ii = 1:stepGroupSize % each step
 
-        xComRef = xq(2,:);
-        yComRef = yq(2,:);
-        stanceFoot
         switch(stanceFoot)
             case(RIGHT_FOOT)
-                footPlacementPair = [[uLINK(LLEG_J5).p(1); ...
-                                      uLINK(LLEG_J5).p(2)] steps(:,1)]
-                stanceFootLink = 7;
+                stanceFootLink = RLEG_J5;
+                stanceHipLink = RLEG_J0;
+                swingHipLink = LLEG_J0;
+                swingFootLink = LLEG_J5;
             case(LEFT_FOOT)
-                footPlacementPair = [[uLINK(RLEG_J5).p(1); ...
-                                      uLINK(RLEG_J5).p(2)] steps(:,1)]
-                stanceFootLink = 13;
+                stanceFootLink = LLEG_J5;
+                stanceHipLink = LLEG_J0;
+                swingHipLink = RLEG_J0;
+                swingFootLink = RLEG_J5;
             otherwise
                 disp 'stance foot isn''t being used correctly'
         end
 
+        footPlacementPair = [[uLINK(swingFootLink).p(1); ...
+                              uLINK(swingFootLink).p(2)] steps(:,1)];
+        
         [xSwing, ySwing, zSwing] = ...
             cubic_spline_trajectory( footPlacementPair(1,:), ...
                                      footPlacementPair(2,:), ...
                                      [0, zSwingHeight], tsPerStep);
-
-        figure(graphPlotHandle)
-        subplot(2,1,1)
-        cla
-        hold on
-        plot(xSwing)
-        plot(xComRef)
-        plot(xZmpRef)
-        plot(xZmp)
-        legend('xSwing','xComRef','xZmpRef','xZmp')
-        subplot(2,1,2)
-        cla
-        hold on
-        plot(yComRef)
-        plot(yZmpRef)
-        plot(ySwing)
-        plot(yZmp)
-        legend('ySwing','yComRef','yZmpRef','yZmp')
-
                                  
-        for i=1:20:tsPerStep
-            uLINK(BODY).p = [xComRef(i), yComRef(i), uLINK(BODY).p(3)]';
+        for i=1:5:tsPerStep
+            uLINK(BODY).p = [xComRef((ii-1)*tsPerStep+i), ...
+                          yComRef((ii-1)*tsPerStep+i), uLINK(BODY).p(3)]';
             uLINK(BODY).R = eye(3);
 
             % set stance foot
@@ -141,34 +147,45 @@ for iii = 1:3 % group of steps
                 0.4, swingfoot);
 
             for j=0:5
-                switch(stanceFoot)
-                    case(RIGHT_FOOT)
-                        uLINK(RLEG_J0+j).q = qRStance(j+1);
-                        uLINK(LLEG_J0+j).q = qRSwing(j+1);
-                    case(LEFT_FOOT)
-                        uLINK(RLEG_J0+j).q = qRSwing(j+1);
-                        uLINK(LLEG_J0+j).q = qRStance(j+1);
-                    otherwise
-                        disp 'stance foot isn''t being used correctly'
-                end
+                uLINK(stanceHipLink+j).q = qRStance(j+1);
+                uLINK(swingHipLink+j).q = qRSwing(j+1);
             end
             ForwardKinematics(1);
             
-            figure(robotViewHandle)
+            % graphing
+            figure(robotViewHandle1)
             clf
             DrawRobot
             view([30,10])
+            
+            figure(robotViewHandle2)
+            clf
+            DrawRobot
+            view([90,10])
+            
+            figure(graphPlotHandle)
+            subplot(2,1,1)
+            hold on
+            plot((ii-1)*tsPerStep+i,xComRef((ii-1)*tsPerStep+i),'o')
+            plot((ii-1)*tsPerStep+i,xZmp((ii-1)*tsPerStep+i),'x')
+            legend('xComRef','xZmpRef','xZmp')
+            subplot(2,1,2)
+            hold on
+            plot((ii-1)*tsPerStep+i,yComRef((ii-1)*tsPerStep+i),'o')
+            plot((ii-1)*tsPerStep+i,yZmp((ii-1)*tsPerStep+i),'x')
+            legend('yComRef','yZmpRef','yZmp')
+            
             pause(0.001)
         end
 
-        steps = [steps(:,2:end), [steps(1,end) + .2; (-1)^stanceFoot*.1]]
+        steps = [steps(:,2:end), [steps(1,end) + xStepSize; ...
+                 (-1)^stanceFoot*yStepSize]]
 
-        xErr = xq(1,tsPerStep)
-        yErr = yq(1,tsPerStep)
-
-    %     stepIdx = stepIdx + 1;
         stanceFoot = mod(stanceFoot + 1, 2);
     end
+    
+    xErr = xq(1,tsPerStep*stepGroupSize)
+    yErr = yq(1,tsPerStep*stepGroupSize)
 end
 % TODO: have the robot be able to oscillate back and forth
 % Simulate dynamics????

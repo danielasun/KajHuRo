@@ -1,0 +1,2 @@
+clear
+REGENERATE_ROBOT_DATA = true
