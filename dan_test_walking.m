@@ -7,63 +7,79 @@ clear
 addpath(strcat(pwd(),'/preview_control'))
 addpath(strcat(pwd(),'/graphing'))
 
-SetupBipedRobot3
-walk_config;
+REGENERATE_ROBOT_DATA = 0;
 
-% defining the zmp system. Same for x and y
-T = 0.005;
-t = 0:T:100000;
-previewLength = 3/T;
 
-zc = uLINK(BODY).p(3); % height of the CoM above the ground
-gconst = 9.8; % m/s 
+if exist('robot_config.mat','file') ~= 2 || REGENERATE_ROBOT_DATA == true
+    disp 'regenerating robot preview controller'
+    SetupBipedRobot3
+    walk_config;
 
-A = [1 T T^2;
-     0 1 T;
-     0 0 1];
- 
-B = [T^3/6; T^2/2; T];
+    % defining the zmp system. Same for x and y
+    T = 0.005;
+    t = 0:T:100000;
+    previewLength = 1.6/T;
 
-C = [ 1 0 -zc/gconst];
+    zc = uLINK(BODY).p(3); % height of the CoM above the ground
+    gconst = 9.8; % m/s 
 
-D = 0;
+    A = [1 T T^2;
+         0 1 T;
+         0 0 1];
 
-Qe = 1;
-Qx = diag([0 0 0]);
-R = 1e-6;
+    B = [T^3/6; T^2/2; T];
 
-% calculate the preview control gains and the simulation system
-sys = ss(A,B,C,D,T);
-[sys_t,Gi,Gx,Gd]= preview_control(sys,previewLength,Qe,Qx,R);
+    C = [ 1 0 -zc/gconst];
 
-steps = [ 0   0    0    0 ;
-         -0.1 0.1 -0.1  0.1];
+    D = 0;
 
-tsPerStep = previewLength/2;
+    Qe = 1;
+    Qx = diag([0 0 0]);
+    R = 1e-6;
 
-stepIdx = 1;
-xErr = 0;
-yErr = 0;
-zSwingHeight = 0.15;
-RIGHT_FOOT = 0;
-LEFT_FOOT = 1;
-stanceFoot = LEFT_FOOT;
+    % calculate the preview control gains and the simulation system
+    sys = ss(A,B,C,D,T);
+    [sys_t,Gi,Gx,Gd]= preview_control(sys,previewLength,Qe,Qx,R);
+
+    steps = [ 0   0    0    .3 ;
+              0  0  -0.1  0.1];
+
+    tsPerStep = previewLength/2;
+
+    stepIdx = 1;
+    xErr = 0;
+    yErr = 0;
+    zSwingHeight = 0.15;
+    RIGHT_FOOT = 0;
+    LEFT_FOOT = 1;
+    stanceFoot = LEFT_FOOT;
+
+    xq = [0 uLINK(BODY).p(1), 0 0]';
+    yq = [0 uLINK(BODY).p(2), 0 0]';
+
+    save('robot_config')
+else
+    disp 'got here'
+    load('robot_config.mat')
+end
+
 robotViewHandle = figure('units','normalized','position',[0 0.5 0.3 0.3])
-graphPlotHandle = figure('units','normalized','position',[0 0.1 0.3 0.3]) 
-xq = [0 uLINK(BODY).p(1), 0 0]';
-yq = [0 uLINK(BODY).p(2), 0 0]';
+graphPlotHandle = figure('units','normalized','position',[0 0.1 0.3 0.3])
+
 
 %%%%%%%%%%%
 % Walking %
 %%%%%%%%%%%
-for iii = 1:3
+for iii = 1:3 % group of steps
+    
+    
     for ii = 1:3
         xZmpRef = footsteps(steps(1,:), tsPerStep);
         yZmpRef = footsteps(steps(2,:), tsPerStep);
 
-        [xq, xZmp, ~] = SimulatePreviewDynamics(sys, sys_t, Gi, Gx, Gd, ...
+        [xq, xZmp, ux] = SimulatePreviewDynamics(sys, sys_t, Gi, Gx, Gd, ...
             xZmpRef, xq(2:4,end), xErr, previewLength);
-        [yq, yZmp, ~] = SimulatePreviewDynamics(sys, sys_t, Gi, Gx, Gd, ...
+        [yq, yZmp, uy] = SimulatePreviewDynamics(sys, sys_t, Gi, Gx, Gd, ...
             yZmpRef, yq(2:4,end), yErr, previewLength);
 
         xComRef = xq(2,:);
@@ -91,10 +107,10 @@ for iii = 1:3
         subplot(2,1,1)
         cla
         hold on
-%         plot(xSwing)
+        plot(xSwing)
         plot(xComRef)
         plot(xZmpRef)
-%         plot(xZmp)
+        plot(xZmp)
         legend('xSwing','xComRef','xZmpRef','xZmp')
         subplot(2,1,2)
         cla
@@ -147,8 +163,8 @@ for iii = 1:3
 
         steps = [steps(:,2:end), [steps(1,end) + .2; (-1)^stanceFoot*.1]]
 
-        xErr = 0; %xq(1,tsPerStep)
-        yErr = 0; % yq(1,tsPerStep)
+        xErr = xq(1,tsPerStep)
+        yErr = yq(1,tsPerStep)
 
     %     stepIdx = stepIdx + 1;
         stanceFoot = mod(stanceFoot + 1, 2);
