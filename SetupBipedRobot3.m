@@ -9,7 +9,7 @@ UX = [1 0 0]';
 UY = [0 1 0]';
 UZ = [0 0 1]';
 
-linkLength = .4;
+linkLength = .35;
 comHeight = .7;
 GND = 0.109115348192675
 

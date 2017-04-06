@@ -14,7 +14,7 @@ end
 
 if exist('robot_config.mat','file') ~= 2 || REGENERATE_ROBOT_DATA == true
     disp 'regenerating robot preview controller'
-    REGENERATE_ROBOT_DATA = false
+    REGENERATE_ROBOT_DATA = false;
     SetupBipedRobot3
     walk_config;
 
@@ -51,7 +51,7 @@ end
 
 % Constants
 tsPerStep = round(previewLength/1.5);
-numStepGroups = 4;
+numStepGroups = 2;
 xStepSize = .2;
 yStepSize = .1;
 stepIdx = 1;
@@ -63,23 +63,149 @@ LEFT_FOOT = 1;
 stanceFoot = LEFT_FOOT;
 stepGroupSize = 2;
 % linkLength = .35;
+tsPerFrame = 30;
 
 xq0 = [0 uLINK(BODY).p(1), 0 0]';
 yq0 = [0 uLINK(BODY).p(2), 0 0]';
 
-
-steps = [ 0 0     0    0.2;
-          0 0.1  -0.1  0.1];
+% always set the number of steps be an even number
+steps = [ 0 0 0     0    ;
+          0 0 -0.1  0.1 ];
 t = 0:T:100000;
 
 robotViewH1 = figure('units','normalized','position',[0 0.5 0.3 0.3]);
 robotViewH2 = figure('units','normalized','position',[0.32 0.5 0.3 0.3]);
+robotViewH3 = figure('units','normalized','position',[0.32 0.1 0.3 0.3]);
 graphPlotH = figure('units','normalized','position',[0 0.1 0.3 0.3]);
 
 
 % need an initialization phase where you just move the COM and keep both
 % feet on the ground.
 
+%%%%%%%%%%%%
+% Starting %
+%%%%%%%%%%%%
+
+stepGroupIdx
+xZmpRef = footsteps(steps(1,:), tsPerStep);
+yZmpRef = footsteps(steps(2,:), tsPerStep);
+
+[xq, xZmp, ux] = SimulatePreviewDynamics(sys, sys_t, Gi, Gx, Gd, ...
+    xZmpRef, xq0(2:4), xErr, previewLength);
+[yq, yZmp, uy] = SimulatePreviewDynamics(sys, sys_t, Gi, Gx, Gd, ...
+    yZmpRef, yq0(2:4), yErr, previewLength);
+
+xComRef = xq(2,:);
+yComRef = yq(2,:);
+stanceFoot
+
+figure(graphPlotH)
+subplot(2,1,1)
+cla
+hold on
+plot(xComRef)
+plot(xZmpRef)
+plot(xZmp)
+legend('xComRef','xZmpRef','xZmp')
+subplot(2,1,2)
+cla
+hold on
+plot(yComRef)
+plot(yZmpRef)
+plot(yZmp)
+legend('yComRef','yZmpRef','yZmp')
+
+for ii = 1:2 % each step
+    
+    switch(stanceFoot)
+        case(RIGHT_FOOT)
+            stanceFootLink = RLEG_J5;
+            stanceHipLink = RLEG_J0;
+            swingHipLink = LLEG_J0;
+            swingFootLink = LLEG_J5;
+        case(LEFT_FOOT)
+            stanceFootLink = LLEG_J5;
+            stanceHipLink = LLEG_J0;
+            swingHipLink = RLEG_J0;
+            swingFootLink = RLEG_J5;
+        otherwise
+            disp 'stance foot isn''t being used correctly'
+    end
+    
+    footPlacementPair = [[uLINK(swingFootLink).p(1); ...
+        uLINK(swingFootLink).p(2)] steps(:,1)];
+    
+%     [xSwing, ySwing, zSwing] = ...
+%         cubic_spline_trajectory( footPlacementPair(1,:), ...
+%         footPlacementPair(2,:), ...
+%         [GND, zSwingHeight], tsPerStep);
+    
+    for i=1:tsPerFrame:tsPerStep
+        uLINK(BODY).p = [xComRef((ii-1)*tsPerStep+i), ...
+            yComRef((ii-1)*tsPerStep+i), uLINK(BODY).p(3)]';
+        uLINK(BODY).R = eye(3);
+        
+        % set stance foot
+        stancefoot.p = [uLINK(stanceFootLink).p(1), ...
+            uLINK(stanceFootLink).p(2), GND]';
+        stancefoot.R = RPY2R([0, 0, 0]);  %  -pi/4 < q < pi/4
+        qRStance = IK_leg(uLINK(BODY), (-1)^stanceFoot*-0.1, linkLength, ...
+            linkLength, stancefoot);
+        
+        % set swing foot
+        swingfoot.p = [uLINK(swingFootLink).p(1), uLINK(swingFootLink).p(2), GND]';
+        swingfoot.R = RPY2R([0, 0, 0]);
+        qRSwing = IK_leg(uLINK(BODY), (-1)^stanceFoot*0.1, linkLength, ...
+            linkLength, swingfoot);
+        
+        for j=0:5
+            uLINK(stanceHipLink+j).q = qRStance(j+1);
+            uLINK(swingHipLink+j).q = qRSwing(j+1);
+        end
+        ForwardKinematics(1);
+        
+        % graphing
+        figure(robotViewH1)
+        clf
+        DrawRobot
+        view([0,0])
+        
+        figure(robotViewH2)
+        clf
+        DrawRobot
+        view([90,0])
+        
+        figure(robotViewH3)
+        clf
+        DrawRobot
+        view([30,25])
+        
+        figure(graphPlotH)
+        subplot(2,1,1)
+        hold on
+        plot((ii-1)*tsPerStep+i,xComRef((ii-1)*tsPerStep+i),'o')
+        plot((ii-1)*tsPerStep+i,xZmp((ii-1)*tsPerStep+i),'x')
+        legend('xComRef','xZmpRef','xZmp')
+        subplot(2,1,2)
+        hold on
+        plot((ii-1)*tsPerStep+i,yComRef((ii-1)*tsPerStep+i),'o')
+        plot((ii-1)*tsPerStep+i,yZmp((ii-1)*tsPerStep+i),'x')
+        legend('yComRef','yZmpRef','yZmp')
+        drawnow
+        pause(0.001)
+    end
+    
+    steps = [steps(:,2:end), [steps(1,end) + xStepSize; ...
+        (-1)^stanceFoot*yStepSize]]
+    
+    stanceFoot = mod(stanceFoot + 1, 2);
+end
+
+% reinitialize for next steps
+xErr = xq(1,tsPerStep*stepGroupSize+1 );
+yErr = yq(1,tsPerStep*stepGroupSize+1);
+xq0 = xq(:,tsPerStep*stepGroupSize+1);
+yq0 = yq(:,tsPerStep*stepGroupSize+1);
 
 
 %%%%%%%%%%%
@@ -140,7 +266,7 @@ for stepGroupIdx = 1:numStepGroups % group of steps
                                      footPlacementPair(2,:), ...
                                      [GND, zSwingHeight], tsPerStep);
                                  
-        for i=1:20:tsPerStep
+        for i=1:tsPerFrame:tsPerStep
             uLINK(BODY).p = [xComRef((ii-1)*tsPerStep+i), ...
                           yComRef((ii-1)*tsPerStep+i), uLINK(BODY).p(3)]';
             uLINK(BODY).R = eye(3);
@@ -175,6 +301,11 @@ for stepGroupIdx = 1:numStepGroups % group of steps
             DrawRobot
             view([90,0])
             
+            figure(robotViewH3)
+            clf
+            DrawRobot
+            view([30,25])
+            
             figure(graphPlotH)
             subplot(2,1,1)
             hold on
@@ -186,7 +317,7 @@ for stepGroupIdx = 1:numStepGroups % group of steps
             plot((ii-1)*tsPerStep+i,yComRef((ii-1)*tsPerStep+i),'o')
             plot((ii-1)*tsPerStep+i,yZmp((ii-1)*tsPerStep+i),'x')
             legend('yComRef','yZmpRef','yZmp')
-
+            drawnow
             pause(0.001)
         end
 
@@ -203,8 +334,261 @@ for stepGroupIdx = 1:numStepGroups % group of steps
     yq0 = yq(:,tsPerStep*stepGroupSize+1);
 end
 
+%%%%%%%%%%%%%%%%%%%%
+% Coming to a stop %
+%%%%%%%%%%%%%%%%%%%%
 
+finalx = steps(1,2)
+steps = [ steps(:,1:2) [finalx finalx; -0.1 0.1] ]; % TODO: either edit this...
 
-% TODO: stop walking 
-% the preview controller always starts with a very large spike in the
-% movement to correct for something which it shouldn't be doing.
+xZmpRef = footsteps(steps(1,:), tsPerStep);
+yZmpRef = footsteps(steps(2,:), tsPerStep);
+
+[xq, xZmp, ux] = SimulatePreviewDynamics(sys, sys_t, Gi, Gx, Gd, ...
+    xZmpRef, xq0(2:4), xErr, previewLength);
+[yq, yZmp, uy] = SimulatePreviewDynamics(sys, sys_t, Gi, Gx, Gd, ...
+    yZmpRef, yq0(2:4), yErr, previewLength);
+
+xComRef = xq(2,:);
+yComRef = yq(2,:);
+stanceFoot
+
+figure(graphPlotH)
+subplot(2,1,1)
+cla
+hold on
+plot(xComRef)
+plot(xZmpRef)
+plot(xZmp)
+legend('xComRef','xZmpRef','xZmp')
+subplot(2,1,2)
+cla
+hold on
+plot(yComRef)
+plot(yZmpRef)
+plot(yZmp)
+legend('yComRef','yZmpRef','yZmp')
+
+for ii = 1:2 % each step
+
+    switch(stanceFoot)
+        case(RIGHT_FOOT)
+            stanceFootLink = RLEG_J5;
+            stanceHipLink = RLEG_J0;
+            swingHipLink = LLEG_J0;
+            swingFootLink = LLEG_J5;
+        case(LEFT_FOOT)
+            stanceFootLink = LLEG_J5;
+            stanceHipLink = LLEG_J0;
+            swingHipLink = RLEG_J0;
+            swingFootLink = RLEG_J5;
+        otherwise
+            disp 'stance foot isn''t being used correctly'
+    end
+
+    footPlacementPair = [[uLINK(swingFootLink).p(1); ...
+                          uLINK(swingFootLink).p(2)] steps(:,1)];
+
+    [xSwing, ySwing, zSwing] = ...
+        cubic_spline_trajectory( footPlacementPair(1,:), ...
+                                 footPlacementPair(2,:), ...
+                                 [GND, zSwingHeight], tsPerStep);
+
+    for i=1:tsPerFrame:tsPerStep
+        uLINK(BODY).p = [xComRef((ii-1)*tsPerStep+i), ...
+                      yComRef((ii-1)*tsPerStep+i), uLINK(BODY).p(3)]';
+        uLINK(BODY).R = eye(3);
+
+        % set stance foot
+        stancefoot.p = [uLINK(stanceFootLink).p(1), ...
+                        uLINK(stanceFootLink).p(2), GND]';
+        stancefoot.R = RPY2R([0, 0, 0]);  %  -pi/4 < q < pi/4
+        qRStance = IK_leg(uLINK(BODY), (-1)^stanceFoot*-0.1, linkLength, ...
+            linkLength, stancefoot);
+
+        % set swing foot
+        swingfoot.p = [xSwing(i), ySwing(i), zSwing(i)]';
+        swingfoot.R = RPY2R([0, 0, 0]);
+        qRSwing = IK_leg(uLINK(BODY), (-1)^stanceFoot*0.1, linkLength, ...
+            linkLength, swingfoot);
+
+        for j=0:5
+            uLINK(stanceHipLink+j).q = qRStance(j+1);
+            uLINK(swingHipLink+j).q = qRSwing(j+1);
+        end
+        ForwardKinematics(1);
+
+        % graphing
+        figure(robotViewH1)
+        clf
+        DrawRobot
+        view([0,0])
+
+        figure(robotViewH2)
+        clf
+        DrawRobot
+        view([90,0])
+
+        figure(robotViewH3)
+        clf
+        DrawRobot
+        view([30,25])
+        
+        figure(graphPlotH)
+        subplot(2,1,1)
+        hold on
+        plot((ii-1)*tsPerStep+i,xComRef((ii-1)*tsPerStep+i),'o')
+        plot((ii-1)*tsPerStep+i,xZmp((ii-1)*tsPerStep+i),'x')
+        legend('xComRef','xZmpRef','xZmp')
+        subplot(2,1,2)
+        hold on
+        plot((ii-1)*tsPerStep+i,yComRef((ii-1)*tsPerStep+i),'o')
+        plot((ii-1)*tsPerStep+i,yZmp((ii-1)*tsPerStep+i),'x')
+        legend('yComRef','yZmpRef','yZmp')
+
+        pause(0.001)
+    end
+
+    % appending steps that stay in the same place
+    steps = [steps(:,2:end), [steps(1,end); 0]]
+
+    stanceFoot = mod(stanceFoot + 1, 2);
+end
+
+% reinitialize for next steps
+xErr = xq(1,tsPerStep*stepGroupSize+1 );
+yErr = yq(1,tsPerStep*stepGroupSize+1);
+xq0 = xq(:,tsPerStep*stepGroupSize+1);
+yq0 = yq(:,tsPerStep*stepGroupSize+1);
+
+%%%%%%%%%%%%
+% Stopping %
+%%%%%%%%%%%%
+
+for stepGroupIdx = 1:2
+    stepGroupIdx
+    xZmpRef = footsteps(steps(1,:), tsPerStep);
+    yZmpRef = footsteps(steps(2,:), tsPerStep);
+
+    [xq, xZmp, ux] = SimulatePreviewDynamics(sys, sys_t, Gi, Gx, Gd, ...
+        xZmpRef, xq0(2:4), xErr, previewLength);
+    [yq, yZmp, uy] = SimulatePreviewDynamics(sys, sys_t, Gi, Gx, Gd, ...
+        yZmpRef, yq0(2:4), yErr, previewLength);
+
+    xComRef = xq(2,:);
+    yComRef = yq(2,:);
+    stanceFoot
+
+    figure(graphPlotH)
+    subplot(2,1,1)
+    cla
+    hold on
+    plot(xComRef)
+    plot(xZmpRef)
+    plot(xZmp)
+    legend('xComRef','xZmpRef','xZmp')
+    subplot(2,1,2)
+    cla
+    hold on
+    plot(yComRef)
+    plot(yZmpRef)
+    plot(yZmp)
+    legend('yComRef','yZmpRef','yZmp')
+
+    for ii = 1:2 % each step
+
+        switch(stanceFoot)
+            case(RIGHT_FOOT)
+                stanceFootLink = RLEG_J5;
+                stanceHipLink = RLEG_J0;
+                swingHipLink = LLEG_J0;
+                swingFootLink = LLEG_J5;
+            case(LEFT_FOOT)
+                stanceFootLink = LLEG_J5;
+                stanceHipLink = LLEG_J0;
+                swingHipLink = RLEG_J0;
+                swingFootLink = RLEG_J5;
+            otherwise
+                disp 'stance foot isn''t being used correctly'
+        end
+
+        % come to rest with open stance, LEFT_FOOT is the starting foot atm
+        footPlacementPair = [[uLINK(swingFootLink).p(1); ...
+            uLINK(swingFootLink).p(2)] [steps(1,end); (-1)^stanceFoot*0.1]]; 
+
+        [xSwing, ySwing, zSwing] = ...
+            cubic_spline_trajectory( footPlacementPair(1,:), ...
+            footPlacementPair(2,:), ...
+            [GND, zSwingHeight], tsPerStep);
+
+        for i=1:tsPerFrame:tsPerStep
+            uLINK(BODY).p = [xComRef((ii-1)*tsPerStep+i), ...
+                yComRef((ii-1)*tsPerStep+i), uLINK(BODY).p(3)]';
+            uLINK(BODY).R = eye(3);
+
+            % set stance foot
+            stancefoot.p = [uLINK(stanceFootLink).p(1), ...
+                uLINK(stanceFootLink).p(2), GND]';
+            stancefoot.R = RPY2R([0, 0, 0]);  %  -pi/4 < q < pi/4
+            qRStance = IK_leg(uLINK(BODY), (-1)^stanceFoot*-0.1, linkLength, ...
+                linkLength, stancefoot);
+
+            % set swing foot
+            swingfoot.p = [xSwing(i), ySwing(i), zSwing(i)]';
+            swingfoot.R = RPY2R([0, 0, 0]);
+            qRSwing = IK_leg(uLINK(BODY), (-1)^stanceFoot*0.1, linkLength, ...
+                linkLength, swingfoot);
+
+            for j=0:5
+                uLINK(stanceHipLink+j).q = qRStance(j+1);
+                uLINK(swingHipLink+j).q = qRSwing(j+1);
+            end
+            ForwardKinematics(1);
+
+            % graphing
+            figure(robotViewH1)
+            clf
+            DrawRobot
+            view([0,0])
+
+            figure(robotViewH2)
+            clf
+            DrawRobot
+            view([90,0])
+            
+            figure(robotViewH3)
+            clf
+            DrawRobot
+            view([30,25])
+            
+            figure(graphPlotH)
+            subplot(2,1,1)
+            hold on
+            plot((ii-1)*tsPerStep+i,xComRef((ii-1)*tsPerStep+i),'o')
+            plot((ii-1)*tsPerStep+i,xZmp((ii-1)*tsPerStep+i),'x')
+            legend('xComRef','xZmpRef','xZmp')
+            subplot(2,1,2)
+            hold on
+            plot((ii-1)*tsPerStep+i,yComRef((ii-1)*tsPerStep+i),'o')
+            plot((ii-1)*tsPerStep+i,yZmp((ii-1)*tsPerStep+i),'x')
+            legend('yComRef','yZmpRef','yZmp')
+            drawnow
+            pause(0.001)
+        end
+
+        % reference zmp stays in the same place
+        steps = [steps(:,2:end), [steps(1,end); ...
+            0]]
+
+        stanceFoot = mod(stanceFoot + 1, 2);
+    end
+    
+    % reinitialize for next steps
+    xErr = xq(1,tsPerStep*stepGroupSize+1 );
+    yErr = yq(1,tsPerStep*stepGroupSize+1);
+    xq0 = xq(:,tsPerStep*stepGroupSize+1);
+    yq0 = yq(:,tsPerStep*stepGroupSize+1);
+end
+
+% TODO: last foot needs to pull all the way up to be even with the other
+% foot
