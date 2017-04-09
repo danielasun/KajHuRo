@@ -33,6 +33,12 @@ function [ q,y,u ] = SimulatePreviewDynamics(sys,sys_t,Gi,Gx,Gd,yref,x0,err0,pre
     y = C*x0; % changed to C instead of Ct
     It = [eye(p);zeros(size(Bt,1)-p,size(Bt,2))];
 
+%     if nStepsToSimulate > length(yref)-previewLength-1
+%         error 'ERROR: number of steps to simulate must be less than length(yref)-previewLength-1'
+%     elseif nStepsToSimulate == -1
+%         nStepsToSimulate = length(yref)-previewLength-1
+%     end
+%     
     for i=1:length(yref)-previewLength-1
         u(end+1) = -G*q(:,i) +  Gd*yref(i:i+previewLength-1)';
         q(:,end+1) = At*q(:,i) + Bt*u(:,i) - It*yref(i+1);

@@ -10,8 +10,6 @@ Repeatedly:
 
 	for each step:
 		get next desired foot placement pair
-
-
 		calculate swing foot trajectory
 
 		for all time steps between the step:
@@ -25,5 +23,81 @@ Repeatedly:
 
 	Plan next 3 footsteps
 	append additional steps
+
+%% revamped plan 
+
+if VREP_ON:
+    set tsPerFrame = 1
+else
+    set tsPerFrame = 40
+
+Repeatedly:
+
+    For each step:
+
+        set stance/swing foot variables
+        get next desired foot placement pair
+        calculate swing foot trajectory
+
+        Robot.take_step()
+
+        Robot.swap_stance_leg()
+        Robot.update_positions()
+        add next step
+    end
+
+take_step(Robot,swing_foot_trajectory,zmp_reference,PreviewController)
+    for i = 1:tsPerFrame:tsPerFootstep
+        com_ref = SimulatePreviewDynamicsFrame
+        update desired COM
+        update desired stance foot using IK
+        update desired swing foot using IK
+        
+        if VREP_ON:
+            check to make sure that tsPerFrame = 1
+            command position of all joints
+            trigger next simulation step
+        else
+            MATLAB graphing
+
+PC = ZmpPreviewController
+
+    PC.initialize(T,zc,PreviewLength,g)
+    PC.generate_preview_controller(sys,previewLength,Qe,Qx,R)
+    PC.simulate_preview_dynamics(sys, sys_t, Gi, Gx, Gd, xZmpRef, xq0(2:4), xErr, previewLength)
+    PC.next_frame_preview_dynamics(sys, sys_t, Gi, Gx, Gd, xZmpRef, xq0(2:4), xErr, previewLength)
+    PC.graph preview_dynamics
+    
+    Ref % reference trajectory
+    PC.Gi
+    PC.Gx
+    PC.Gd
+    PC.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

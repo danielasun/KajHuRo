@@ -5,7 +5,7 @@ close all
 % profile on
 
 % defining the system
-T = .005;
+T = .002;
 t = 0:T:100000;
 N = 1.6/T; % preview length
 steps = 1:N;
@@ -44,15 +44,15 @@ Bt = sys_t.b
 Ct = sys_t.c
 
 x0 = [0 0 0]';
-y0 = [.01 0 0]';
+y0 = [.0 0 0]';
 err_x0 = 0; % error in both systems to start out is zero
-err_y0 = .01;
+err_y0 = 0;
 
 
-[qx,zmp_x,ux] = SimulatePreviewDynamics(sys,sys_t,Gi,Gx,Gd,pxref,x0,err_x0,N);
-[qy,ysol,uy] = SimulatePreviewDynamics(sys,sys_t,Gi,Gx,Gd,pyref,y0,err_y0,N);
+[qx,zmp_x,ux] = SimulatePreviewDynamics(sys,sys_t,Gi,Gx,Gd,pxref,x0,err_x0,N,-1);
+[qy,zmp_y,uy] = SimulatePreviewDynamics(sys,sys_t,Gi,Gx,Gd,pyref,y0,err_y0,N,-1);
 
-figure('units','normalized','position',[0 0.5 0.4 0.4]);
+figure('units','normalized','position',[0 0.5 0.35 0.4]);
 subplot(2,4,1:4)
 hold all
 plot(t(1:size(zmp_x,2)),pxref(1:size(zmp_x,2)))
@@ -66,11 +66,11 @@ subplot(2,4,5:8)
 plot(t(1:length(ux)),ux)
 title('control input')
 
-figure('units','normalized','position',[0 0.05 0.4 0.4]);
+figure('units','normalized','position',[0 0.025 0.35 0.4]);
 subplot(2,4,1:4)
 hold all
-plot(t(1:size(ysol,2)),pyref(1:size(ysol,2)))
-plot(t(1:size(ysol,2)),ysol)
+plot(t(1:size(zmp_y,2)),pyref(1:size(zmp_y,2)))
+plot(t(1:size(zmp_y,2)),zmp_y)
 plot(t(1:size(qy,2)),qy(2,:),'r-')
 legend('pyref','zmp','y CoM')
 title('y zmp')
@@ -81,10 +81,34 @@ plot(t(1:length(uy)),uy)
 title('control input')
 
 
+% showing that you can resume in the middle of the run
+y0 = qy(2:4,767);
+err_y0 = qy(1,767);
+pyref = pyref(767:end)
 
+[qy,zmp_y,uy] = SimulatePreviewDynamics(sys,sys_t,Gi,Gx,Gd,pyref,y0,err_y0,N,-1);
 
+figure('units','normalized','position',[0 0.025 0.35 0.4]);
+subplot(2,4,1:4)
+hold all
+plot(t(1:size(zmp_y,2)),pyref(1:size(zmp_y,2)))
+plot(t(1:size(zmp_y,2)),zmp_y)
+plot(t(1:size(qy,2)),qy(2,:),'r-')
+legend('pyref','zmp','y CoM')
+title('y zmp')
+xlabel('time [s]')
+ylabel('y [m]')
+subplot(2,4,5:8)
+plot(t(1:length(uy)),uy)
+title('control input')
 
-
+qylist = []
+% showing that you can simulate one step at a time also:
+for i = 1:length(pyref)-N-1
+    [qy,zmp_y,uy] = SimulatePreviewDynamics(sys,sys_t,Gi,Gx,Gd,pyref,qy(2:4,end),qy(1,end),N,1)
+    qylist(:,end+1) = qy;
+    zmp_y_list(:,end+1) = zmp_y;
+end
 
 
 

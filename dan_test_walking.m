@@ -8,7 +8,7 @@ close all
 
 
 % needs the file regen.m
-if ~exist('REGENERATE_ROBOT_DATA')
+if ~exist('REGENERATE_ROBOT_DATA','var')
     REGENERATE_ROBOT_DATA = 1
 end
 
@@ -62,8 +62,8 @@ RIGHT_FOOT = 0;
 LEFT_FOOT = 1;
 stanceFoot = LEFT_FOOT;
 stepGroupSize = 2;
-% linkLength = .35;
-tsPerFrame = 30;
+tsPerFrame = 40;
+% linkLength = .35; % defined in SetupBipedRobot3
 
 xq0 = [0 uLINK(BODY).p(1), 0 0]';
 yq0 = [0 uLINK(BODY).p(2), 0 0]';
@@ -73,11 +73,10 @@ steps = [ 0 0 0     0    ;
           0 0 -0.1  0.1 ];
 t = 0:T:100000;
 
-robotViewH1 = figure('units','normalized','position',[0 0.5 0.3 0.3]);
-robotViewH2 = figure('units','normalized','position',[0.32 0.5 0.3 0.3]);
-robotViewH3 = figure('units','normalized','position',[0.32 0.1 0.3 0.3]);
-graphPlotH = figure('units','normalized','position',[0 0.1 0.3 0.3]);
-
+robotViewH1 = figure('units','normalized','position',[0 0.65 0.2 0.2]);
+robotViewH2 = figure('units','normalized','position',[0 0.35 0.2 0.2]);
+robotViewH3 = figure('units','normalized','position',[0 0.05 0.2 0.2]);
+graphPlotH = figure('units','normalized','position',[.225 .5 0.3 0.35]);
 
 % need an initialization phase where you just move the COM and keep both
 % feet on the ground.
@@ -86,7 +85,6 @@ graphPlotH = figure('units','normalized','position',[0 0.1 0.3 0.3]);
 % Starting %
 %%%%%%%%%%%%
 
-stepGroupIdx
 xZmpRef = footsteps(steps(1,:), tsPerStep);
 yZmpRef = footsteps(steps(2,:), tsPerStep);
 
@@ -339,7 +337,7 @@ end
 %%%%%%%%%%%%%%%%%%%%
 
 finalx = steps(1,2)
-steps = [ steps(:,1:2) [finalx finalx; -0.1 0.1] ]; % TODO: either edit this...
+steps = [ steps(:,1:2) [finalx finalx; -0.1 0.1] ]; 
 
 xZmpRef = footsteps(steps(1,:), tsPerStep);
 yZmpRef = footsteps(steps(2,:), tsPerStep);
@@ -590,5 +588,7 @@ for stepGroupIdx = 1:2
     yq0 = yq(:,tsPerStep*stepGroupSize+1);
 end
 
-% TODO: last foot needs to pull all the way up to be even with the other
-% foot
+%TODO: Split all of the walking behaviors into functions so that they
+% aren't all fractured everywhere
+
+% TODO: Implement turning in the steps
